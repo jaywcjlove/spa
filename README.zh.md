@@ -100,8 +100,8 @@ swift build -c release
 构建同时支持 Apple Silicon 和 Intel Mac 的通用发布版二进制文件：
 
 ```shell
-$ swift build -c release --arch arm64 --arch x86_64
-$ tar -czf ./spa.tar.gz -C ./.build/apple/Products/Release spa
+$ swift build -c release --arch arm64 --arch x86_64 && \
+  tar -czf ./spa.tar.gz -C ./.build/apple/Products/Release spa
 
 $ brew tap jaywcjlove/tap
 $ cd "$(brew --repository jaywcjlove/tap)"
