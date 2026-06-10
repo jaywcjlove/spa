@@ -1,8 +1,10 @@
 name: CI
 on:
   push:
-    tags:
-      - v*
+    # tags:
+    #   - v*
+    branches:
+      - main
 
 jobs:
   tags:
@@ -12,20 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Extract version from tag
-        id: extract_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
       - name: Create Tag
         id: create_tag
         uses: jaywcjlove/create-tag-action@main
         with:
-          version: ${{ steps.extract_version.outputs.VERSION }}
+          test: '[R|r]elease[d]\s+[v|V]\d(\.\d+){0,2}'
+
+      - name: Create Tag
+        uses: jaywcjlove/create-tag-action@main
+        with:
+          version: ${{ steps.create_tag.outputs.version }}
           release: true
           body: |
             ## Installation
-
-            ### macOS
 
             ```bash
             brew install jaywcjlove/tap/spa
