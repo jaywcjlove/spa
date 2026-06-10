@@ -1,6 +1,6 @@
 import Foundation
 
-let version = "0.1.5"
+let version = "0.1.6"
 
 struct CLIError: Error, CustomStringConvertible {
     let description: String
@@ -122,20 +122,52 @@ struct XcodeProjectEditor {
     }
 
     mutating func removePackage(named packageName: String) throws {
-        guard let productDependency = productDependency(named: packageName) else {
+        var packageIDs = Set<String>()
+        var productDependencies = [(productID: String, packageID: String, productName: String)]()
+
+        if let packageReference = packageReference(named: packageName) {
+            packageIDs.insert(packageReference)
+        }
+
+        if let productDependency = productDependency(named: packageName) {
+            packageIDs.insert(productDependency.packageID)
+            productDependencies.append(productDependency)
+        }
+
+        for packageID in packageIDs {
+            productDependencies.append(contentsOf: productDependenciesReferencingPackage(id: packageID))
+        }
+
+        guard !packageIDs.isEmpty || !productDependencies.isEmpty else {
             throw CLIError(description: "Package not found in project: \(packageName)")
         }
 
-        var idsToRemoveFromLists = Set([productDependency.productID, productDependency.packageID])
-        let buildFileIDs = buildFileIDsReferencingProduct(id: productDependency.productID, productName: packageName)
-        idsToRemoveFromLists.formUnion(buildFileIDs)
+        var idsToRemoveFromLists = packageIDs
+        var buildFileIDs = Set<String>()
+        for productDependency in productDependencies {
+            idsToRemoveFromLists.insert(productDependency.productID)
+            idsToRemoveFromLists.insert(productDependency.packageID)
+            buildFileIDs.formUnion(
+                buildFileIDsReferencingProduct(
+                    id: productDependency.productID,
+                    productName: productDependency.productName
+                )
+            )
+        }
 
+        idsToRemoveFromLists.formUnion(buildFileIDs)
         removeListLines(containing: idsToRemoveFromLists)
-        removeObject(withID: productDependency.productID)
-        removeObject(withID: productDependency.packageID)
+        for productDependency in productDependencies {
+            removeObject(withID: productDependency.productID)
+        }
+        for packageID in packageIDs {
+            removeObject(withID: packageID)
+        }
         for buildFileID in buildFileIDs {
             removeObject(withID: buildFileID)
         }
+        removePackageReferenceLines(named: packageName)
+        removePackageReferenceObjects(named: packageName)
     }
 
     private mutating func ensureSection(named section: String) throws {
@@ -240,13 +272,36 @@ struct XcodeProjectEditor {
         contents.insert(contentsOf: text, at: endRange.lowerBound)
     }
 
-    private func productDependency(named productName: String) -> (productID: String, packageID: String)? {
+    private func packageReference(named packageName: String) -> String? {
         var searchStart = contents.startIndex
-        let productPattern = #"productName = \#(NSRegularExpression.escapedPattern(for: productName));"#
+
+        while let isaRange = contents.range(
+            of: "isa = XCRemoteSwiftPackageReference;",
+            range: searchStart..<contents.endIndex
+        ) {
+            guard let objectRange = rangeOfObjectOrLine(containing: isaRange.lowerBound) else {
+                searchStart = isaRange.upperBound
+                continue
+            }
+
+            if packageReference(in: objectRange, matches: packageName),
+               let packageID = objectID(in: objectRange) {
+                return packageID
+            }
+
+            searchStart = isaRange.upperBound
+        }
+
+        return nil
+    }
+
+    private func productDependency(named productName: String) -> (productID: String, packageID: String, productName: String)? {
+        var searchStart = contents.startIndex
+        let productPattern = #"productName = "?\#(NSRegularExpression.escapedPattern(for: productName))"?;"#
 
         while let productNameRange = contents.range(
             of: productPattern,
-            options: .regularExpression,
+            options: [.regularExpression, .caseInsensitive],
             range: searchStart..<contents.endIndex
         ) {
             guard let objectRange = rangeOfObjectOrLine(containing: productNameRange.lowerBound),
@@ -257,10 +312,33 @@ struct XcodeProjectEditor {
                 continue
             }
 
-            return (productID, packageID)
+            return (productID, packageID, productName)
         }
 
         return nil
+    }
+
+    private func productDependenciesReferencingPackage(id packageID: String) -> [(productID: String, packageID: String, productName: String)] {
+        var dependencies: [(productID: String, packageID: String, productName: String)] = []
+        var searchStart = contents.startIndex
+        let packagePattern = #"package = \#(packageID)\b"#
+
+        while let packageRange = contents.range(
+            of: packagePattern,
+            options: .regularExpression,
+            range: searchStart..<contents.endIndex
+        ) {
+            if let objectRange = rangeOfObjectOrLine(containing: packageRange.lowerBound),
+               contents.range(of: "isa = XCSwiftPackageProductDependency;", range: objectRange) != nil,
+               let productID = objectID(in: objectRange),
+               let productName = productName(in: objectRange) {
+                dependencies.append((productID, packageID, productName))
+            }
+
+            searchStart = packageRange.upperBound
+        }
+
+        return dependencies
     }
 
     private func buildFileIDsReferencingProduct(id productID: String, productName: String) -> Set<String> {
@@ -334,6 +412,66 @@ struct XcodeProjectEditor {
             return
         }
         contents.removeSubrange(objectRange)
+    }
+
+    private mutating func removePackageReferenceLines(named packageName: String) {
+        var searchStart = contents.startIndex
+        let escapedName = NSRegularExpression.escapedPattern(for: packageName)
+        let pattern = #"XCRemoteSwiftPackageReference\s+"\#(escapedName)""#
+
+        while let matchRange = contents.range(
+            of: pattern,
+            options: [.regularExpression, .caseInsensitive],
+            range: searchStart..<contents.endIndex
+        ) {
+            guard let lineRange = lineRange(containing: matchRange.lowerBound) else {
+                searchStart = matchRange.upperBound
+                continue
+            }
+
+            let line = contents[lineRange]
+            if line.contains("*/,") {
+                contents.removeSubrange(lineRange)
+                searchStart = lineRange.lowerBound
+            } else {
+                searchStart = matchRange.upperBound
+            }
+        }
+    }
+
+    private mutating func removePackageReferenceObjects(named packageName: String) {
+        var searchStart = contents.startIndex
+        let escapedName = NSRegularExpression.escapedPattern(for: packageName)
+        let patterns = [
+            #"XCRemoteSwiftPackageReference\s+"\#(escapedName)""#,
+            #"repositoryURL = "?[^;"]*[/:\s]\#(escapedName)(\.git)?"?;"#
+        ]
+
+        while searchStart < contents.endIndex {
+            var nextMatch: Range<String.Index>?
+            for pattern in patterns {
+                if let match = contents.range(
+                    of: pattern,
+                    options: [.regularExpression, .caseInsensitive],
+                    range: searchStart..<contents.endIndex
+                ), nextMatch == nil || match.lowerBound < nextMatch!.lowerBound {
+                    nextMatch = match
+                }
+            }
+
+            guard let matchRange = nextMatch else {
+                break
+            }
+
+            guard let objectRange = rangeOfObjectOrLine(containing: matchRange.lowerBound),
+                  contents.range(of: "isa = XCRemoteSwiftPackageReference;", range: objectRange) != nil else {
+                searchStart = matchRange.upperBound
+                continue
+            }
+
+            contents.removeSubrange(objectRange)
+            searchStart = objectRange.lowerBound
+        }
     }
 
     private mutating func append(_ value: String, toListStartingAt start: String.Index) throws {
@@ -417,13 +555,7 @@ struct XcodeProjectEditor {
     }
 
     private func rangeOfObject(withID id: String) -> Range<String.Index>? {
-        guard let idRange = contents.range(
-            of: #"\n[ \t]*\#(id)\b"#,
-            options: .regularExpression
-        ) else {
-            return nil
-        }
-        return rangeOfObject(containing: idRange.upperBound)
+        rangeOfObjectStarting(withID: id)
     }
 
     private func rangeOfObjectOrLine(withID id: String) -> Range<String.Index>? {
@@ -433,7 +565,7 @@ struct XcodeProjectEditor {
         ) else {
             return nil
         }
-        return rangeOfObjectOrLine(containing: idRange.upperBound)
+        return rangeOfObjectStarting(withID: id) ?? lineRange(containing: idRange.upperBound)
     }
 
     private func rangeOfObjectOrLine(containing index: String.Index) -> Range<String.Index>? {
@@ -445,7 +577,10 @@ struct XcodeProjectEditor {
 
     private func rangeOfObject(containing index: String.Index) -> Range<String.Index>? {
         let prefix = contents[..<index]
-        guard let start = prefix.range(of: "\n\t\t", options: .backwards)?.lowerBound else {
+        guard let start = prefix.range(
+            of: #"\n[ \t]*[A-F0-9]{24} /\*[^\n]*\*/ = \{"#,
+            options: [.regularExpression, .backwards]
+        )?.lowerBound else {
             return nil
         }
 
@@ -454,6 +589,21 @@ struct XcodeProjectEditor {
         }
 
         return start..<endRange.upperBound
+    }
+
+    private func rangeOfObjectStarting(withID id: String) -> Range<String.Index>? {
+        guard let startRange = contents.range(
+            of: #"\n[ \t]*\#(id) /\*[^\n]*\*/ = \{"#,
+            options: .regularExpression
+        ) else {
+            return nil
+        }
+
+        guard let endRange = contents.range(of: "\n\t\t};", range: startRange.upperBound..<contents.endIndex) else {
+            return nil
+        }
+
+        return startRange.lowerBound..<endRange.upperBound
     }
 
     private func lineRange(containing index: String.Index) -> Range<String.Index>? {
@@ -468,6 +618,36 @@ struct XcodeProjectEditor {
 
     private func objectID(in range: Range<String.Index>) -> String? {
         firstMatch(in: range, pattern: #"([A-F0-9]{24}) /\*"#)
+    }
+
+    private func productName(in range: Range<String.Index>) -> String? {
+        guard let rawName = firstMatch(in: range, pattern: #"productName = ("?[^";]+"?);"#) else {
+            return nil
+        }
+
+        return rawName.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+
+    private func packageReference(in range: Range<String.Index>, matches packageName: String) -> Bool {
+        let object = String(contents[range])
+        let lowercasedObject = object.lowercased()
+        let lowercasedName = packageName.lowercased()
+        if lowercasedObject.contains(#"xcremoteswiftpackagereference "\#(lowercasedName)""#) ||
+            lowercasedObject.contains("/\(lowercasedName).git") ||
+            lowercasedObject.contains("/\(lowercasedName);") ||
+            lowercasedObject.contains("/\(lowercasedName)\"") {
+            return true
+        }
+
+        let escapedName = NSRegularExpression.escapedPattern(for: packageName)
+        let patterns = [
+            #"XCRemoteSwiftPackageReference\s+"?\#(escapedName)"?"#,
+            #"repositoryURL = "?[^;"]*[/:\s]\#(escapedName)(\.git)?"?;"#
+        ]
+
+        return patterns.contains { pattern in
+            object.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        }
     }
 
     private func firstMatch(in range: Range<String.Index>, pattern: String) -> String? {
