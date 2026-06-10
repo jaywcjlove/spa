@@ -89,10 +89,12 @@ macOS 27 beta 安装
 
 ```bash
 sudo xcode-select -s /Applications/Xcode-26.5.app/Contents/Developer
+sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
 
 sudo mv /Applications/Xcode.app /Applications/Xcode-26.5.app
 sudo xcode-select -s /Library/Developer/CommandLineTools
 env -u HOMEBREW_USE_INTERNAL_API HOMEBREW_NO_INSTALL_FROM_API=1 brew install jaywcjlove/tap/spa
+brew reinstall jaywcjlove/tap/spa
 ```
 
 ## 发布
