@@ -52,12 +52,6 @@ It edits the first `.xcodeproj/project.pbxproj` found in the current directory a
 - `XCSwiftPackageProductDependency`
 - a Frameworks build phase entry for the first native target
 
-## Installation
-
-```bash
-brew install jaywcjlove/tap/spa
-```
-
 ## Usage
 
 ```sh
@@ -87,6 +81,8 @@ The package product name is inferred from the repository name. For example, `htt
 ```sh
 swift build -c release
 cp .build/release/spa /usr/local/bin/spa
+# Or
+brew install jaywcjlove/tap/spa
 ```
 
 ## Release
