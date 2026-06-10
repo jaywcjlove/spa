@@ -52,6 +52,12 @@ It edits the first `.xcodeproj/project.pbxproj` found in the current directory a
 - `XCSwiftPackageProductDependency`
 - a Frameworks build phase entry for the first native target
 
+## Installation
+
+```bash
+brew install jaywcjlove/tap/spa
+```
+
 ## Usage
 
 ```sh

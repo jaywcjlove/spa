@@ -52,6 +52,12 @@ spa
 - `XCSwiftPackageProductDependency`
 - 第一个原生 target 的 Frameworks 构建阶段条目
 
+## 安装
+
+```bash
+brew install jaywcjlove/tap/spa
+```
+
 ## 使用
 
 ```sh
