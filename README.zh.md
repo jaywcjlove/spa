@@ -44,7 +44,7 @@
 spa
 ==
 
-`spa` 是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
+`spa` 是 Swift Package Add 的缩写，是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
 
 它会修改当前目录中找到的第一个 `.xcodeproj/project.pbxproj`，并添加：
 
@@ -81,7 +81,7 @@ spa https://github.com/user/repo 1.2.3
 ```sh
 swift build -c release
 cp .build/release/spa /usr/local/bin/spa
-# Or
+# 或
 brew install jaywcjlove/tap/spa
 ```
 

@@ -44,7 +44,7 @@
 spa
 ==
 
-`spa` is a small Swift command for adding a Swift Package dependency to an Xcode GUI project.
+`spa` is short for Swift Package Add. It is a small Swift command for adding a Swift Package dependency to an Xcode GUI project.
 
 It edits the first `.xcodeproj/project.pbxproj` found in the current directory and adds:
 
