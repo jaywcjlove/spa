@@ -44,7 +44,7 @@
 spa
 ==
 
-`spa` 是 Swift Package Add 的缩写，是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
+`SPA` 是 Swift Package Add 的缩写，是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
 
 它会修改当前目录中找到的第一个 `.xcodeproj/project.pbxproj`，并添加：
 
@@ -56,6 +56,7 @@ spa
 
 ```sh
 spa <github-url> [version]
+spa -r <package-name>
 ```
 
 ## 示例
@@ -63,15 +64,17 @@ spa <github-url> [version]
 ```sh
 spa https://github.com/user/repo
 spa https://github.com/user/repo 1.2.3
+spa -r ArchiveKit
 ```
 
 未传入 `version` 时，`spa` 使用 `main` 分支。传入 `version` 时，`spa` 使用 Xcode 的 `upToNextMajorVersion` 版本规则。
 
-包产品名会根据仓库名推断。例如，`https://github.com/user/Alamofire` 会添加产品 `Alamofire`。
+包产品名会根据仓库名推断。例如，`https://github.com/user/ArchiveKit` 会添加产品 `ArchiveKit`。
 
 ## 选项
 
 ```sh
+-r, --remove <package-name> 移除包依赖
 -h, --help      显示帮助
 -v, --version   显示版本
 ```

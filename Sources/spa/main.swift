@@ -1,14 +1,18 @@
 import Foundation
 
-let version = "0.1.4"
+let version = "0.1.5"
 
 struct CLIError: Error, CustomStringConvertible {
     let description: String
 }
 
+enum Command {
+    case add(repositoryURL: String, version: String?)
+    case remove(packageName: String)
+}
+
 struct Arguments {
-    let repositoryURL: String
-    let version: String?
+    let command: Command
 }
 
 func printHelp() {
@@ -17,12 +21,15 @@ func printHelp() {
 
     Usage:
       spa <github-url> [version]
+      spa -r <package-name>
 
     Examples:
       spa https://github.com/user/repo
       spa https://github.com/user/repo 1.2.3
+      spa -r Alamofire
 
     Options:
+      -r, --remove <package-name> Remove a package dependency
       -h, --help      Show this help
       -v, --version   Show version
     """)
@@ -41,6 +48,10 @@ func parseArguments(_ rawArguments: [String]) throws -> Arguments? {
         return nil
     }
 
+    if args.count == 2, args[0] == "-r" || args[0] == "--remove" {
+        return Arguments(command: .remove(packageName: args[1]))
+    }
+
     guard args.count == 1 || args.count == 2 else {
         throw CLIError(description: "Invalid arguments. Run `spa --help` for usage.")
     }
@@ -50,7 +61,7 @@ func parseArguments(_ rawArguments: [String]) throws -> Arguments? {
         throw CLIError(description: "Only GitHub repository URLs are supported.")
     }
 
-    return Arguments(repositoryURL: repositoryURL, version: args.count == 2 ? args[1] : nil)
+    return Arguments(command: .add(repositoryURL: repositoryURL, version: args.count == 2 ? args[1] : nil))
 }
 
 struct ProjectSelection {
@@ -108,6 +119,23 @@ struct XcodeProjectEditor {
         try appendToProjectPackageReferences(packageID: packageID, repositoryURL: repositoryURL)
         try appendToNativeTargetProductDependencies(productID: productID, productName: productName)
         try appendToFrameworksBuildPhase(buildFileID: buildFileID, productName: productName)
+    }
+
+    mutating func removePackage(named packageName: String) throws {
+        guard let productDependency = productDependency(named: packageName) else {
+            throw CLIError(description: "Package not found in project: \(packageName)")
+        }
+
+        var idsToRemoveFromLists = Set([productDependency.productID, productDependency.packageID])
+        let buildFileIDs = buildFileIDsReferencingProduct(id: productDependency.productID, productName: packageName)
+        idsToRemoveFromLists.formUnion(buildFileIDs)
+
+        removeListLines(containing: idsToRemoveFromLists)
+        removeObject(withID: productDependency.productID)
+        removeObject(withID: productDependency.packageID)
+        for buildFileID in buildFileIDs {
+            removeObject(withID: buildFileID)
+        }
     }
 
     private mutating func ensureSection(named section: String) throws {
@@ -212,6 +240,102 @@ struct XcodeProjectEditor {
         contents.insert(contentsOf: text, at: endRange.lowerBound)
     }
 
+    private func productDependency(named productName: String) -> (productID: String, packageID: String)? {
+        var searchStart = contents.startIndex
+        let productPattern = #"productName = \#(NSRegularExpression.escapedPattern(for: productName));"#
+
+        while let productNameRange = contents.range(
+            of: productPattern,
+            options: .regularExpression,
+            range: searchStart..<contents.endIndex
+        ) {
+            guard let objectRange = rangeOfObjectOrLine(containing: productNameRange.lowerBound),
+                  contents.range(of: "isa = XCSwiftPackageProductDependency;", range: objectRange) != nil,
+                  let productID = objectID(in: objectRange),
+                  let packageID = firstMatch(in: objectRange, pattern: #"package = ([A-F0-9]{24})"#) else {
+                searchStart = productNameRange.upperBound
+                continue
+            }
+
+            return (productID, packageID)
+        }
+
+        return nil
+    }
+
+    private func buildFileIDsReferencingProduct(id productID: String, productName: String) -> Set<String> {
+        var ids = Set<String>()
+        var searchStart = contents.startIndex
+        let productRefPattern = #"productRef = \#(productID)\b"#
+
+        while let productRefRange = contents.range(
+            of: productRefPattern,
+            options: .regularExpression,
+            range: searchStart..<contents.endIndex
+        ) {
+            if let objectRange = rangeOfObjectOrLine(containing: productRefRange.lowerBound),
+               contents.range(of: "isa = PBXBuildFile;", range: objectRange) != nil,
+               let buildFileID = objectID(in: objectRange) {
+                ids.insert(buildFileID)
+            }
+            searchStart = productRefRange.upperBound
+        }
+
+        searchStart = contents.startIndex
+        let commentPattern = #"/\* \#(NSRegularExpression.escapedPattern(for: productName)) in Frameworks \*/"#
+        while let commentRange = contents.range(
+            of: commentPattern,
+            options: .regularExpression,
+            range: searchStart..<contents.endIndex
+        ) {
+            if let lineRange = lineRange(containing: commentRange.lowerBound),
+               let id = firstMatch(in: lineRange, pattern: #"([A-F0-9]{24})"#) {
+                ids.insert(id)
+            }
+            searchStart = commentRange.upperBound
+        }
+
+        return ids
+    }
+
+    private mutating func removeListLines(containing ids: Set<String>) {
+        guard !ids.isEmpty else {
+            return
+        }
+
+        var searchStart = contents.startIndex
+        while searchStart < contents.endIndex {
+            guard let idRange = contents.range(
+                of: #"[A-F0-9]{24}"#,
+                options: .regularExpression,
+                range: searchStart..<contents.endIndex
+            ) else {
+                break
+            }
+
+            let id = String(contents[idRange])
+            guard ids.contains(id), let lineRange = lineRange(containing: idRange.lowerBound) else {
+                searchStart = idRange.upperBound
+                continue
+            }
+
+            let line = contents[lineRange]
+            if line.contains("/*") && line.contains("*/,") {
+                contents.removeSubrange(lineRange)
+                searchStart = lineRange.lowerBound
+            } else {
+                searchStart = idRange.upperBound
+            }
+        }
+    }
+
+    private mutating func removeObject(withID id: String) {
+        guard let objectRange = rangeOfObjectOrLine(withID: id) else {
+            return
+        }
+        contents.removeSubrange(objectRange)
+    }
+
     private mutating func append(_ value: String, toListStartingAt start: String.Index) throws {
         guard let closeIndex = findListCloseIndex(startingAt: start) else {
             throw CLIError(description: "Could not find end of list in project.pbxproj.")
@@ -293,10 +417,30 @@ struct XcodeProjectEditor {
     }
 
     private func rangeOfObject(withID id: String) -> Range<String.Index>? {
-        guard let idRange = contents.range(of: "\n\t\t\(id) ") else {
+        guard let idRange = contents.range(
+            of: #"\n[ \t]*\#(id)\b"#,
+            options: .regularExpression
+        ) else {
             return nil
         }
         return rangeOfObject(containing: idRange.upperBound)
+    }
+
+    private func rangeOfObjectOrLine(withID id: String) -> Range<String.Index>? {
+        guard let idRange = contents.range(
+            of: #"\n[ \t]*\#(id)\b"#,
+            options: .regularExpression
+        ) else {
+            return nil
+        }
+        return rangeOfObjectOrLine(containing: idRange.upperBound)
+    }
+
+    private func rangeOfObjectOrLine(containing index: String.Index) -> Range<String.Index>? {
+        if let objectRange = rangeOfObject(containing: index) {
+            return objectRange
+        }
+        return lineRange(containing: index)
     }
 
     private func rangeOfObject(containing index: String.Index) -> Range<String.Index>? {
@@ -310,6 +454,36 @@ struct XcodeProjectEditor {
         }
 
         return start..<endRange.upperBound
+    }
+
+    private func lineRange(containing index: String.Index) -> Range<String.Index>? {
+        guard index < contents.endIndex else {
+            return nil
+        }
+
+        let lineStart = contents[..<index].lastIndex(of: "\n").map { contents.index(after: $0) } ?? contents.startIndex
+        let lineEnd = contents[index...].firstIndex(of: "\n").map { contents.index(after: $0) } ?? contents.endIndex
+        return lineStart..<lineEnd
+    }
+
+    private func objectID(in range: Range<String.Index>) -> String? {
+        firstMatch(in: range, pattern: #"([A-F0-9]{24}) /\*"#)
+    }
+
+    private func firstMatch(in range: Range<String.Index>, pattern: String) -> String? {
+        guard let range = contents.range(of: pattern, options: .regularExpression, range: range) else {
+            return nil
+        }
+
+        let match = String(contents[range])
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let result = regex.firstMatch(in: match, range: NSRange(match.startIndex..., in: match)),
+              result.numberOfRanges > 1,
+              let captureRange = Range(result.range(at: 1), in: match) else {
+            return match
+        }
+
+        return String(match[captureRange])
     }
 }
 
@@ -348,11 +522,18 @@ do {
     let project = try findProject(in: currentDirectory)
     var editor = XcodeProjectEditor(contents: try String(contentsOf: project.pbxprojURL, encoding: .utf8))
 
-    try editor.addPackage(repositoryURL: arguments.repositoryURL, version: arguments.version)
-    try editor.contents.write(to: project.pbxprojURL, atomically: true, encoding: .utf8)
+    switch arguments.command {
+    case let .add(repositoryURL, packageVersion):
+        try editor.addPackage(repositoryURL: repositoryURL, version: packageVersion)
+        try editor.contents.write(to: project.pbxprojURL, atomically: true, encoding: .utf8)
 
-    let requirement = arguments.version.map { "version \($0)" } ?? "branch main"
-    print("Added \(inferProductName(from: arguments.repositoryURL)) (\(requirement)) to \(project.xcodeprojURL.lastPathComponent).")
+        let requirement = packageVersion.map { "version \($0)" } ?? "branch main"
+        print("Added \(inferProductName(from: repositoryURL)) (\(requirement)) to \(project.xcodeprojURL.lastPathComponent).")
+    case let .remove(packageName):
+        try editor.removePackage(named: packageName)
+        try editor.contents.write(to: project.pbxprojURL, atomically: true, encoding: .utf8)
+        print("Removed \(packageName) from \(project.xcodeprojURL.lastPathComponent).")
+    }
 } catch {
     fputs("spa: \(error)\n", stderr)
     exit(EXIT_FAILURE)

@@ -56,6 +56,7 @@ It edits the first `.xcodeproj/project.pbxproj` found in the current directory a
 
 ```sh
 spa <github-url> [version]
+spa -r <package-name>
 ```
 
 ## Examples
@@ -63,15 +64,17 @@ spa <github-url> [version]
 ```sh
 spa https://github.com/user/repo
 spa https://github.com/user/repo 1.2.3
+spa -r ArchiveKit
 ```
 
 When `version` is omitted, `spa` uses the `main` branch. When `version` is provided, `spa` uses Xcode's `upToNextMajorVersion` requirement.
 
-The package product name is inferred from the repository name. For example, `https://github.com/user/Alamofire` adds product `Alamofire`.
+The package product name is inferred from the repository name. For example, `https://github.com/user/ArchiveKit` adds product `ArchiveKit`.
 
 ## Options
 
 ```sh
+-r, --remove <package-name> Remove a package dependency
 -h, --help      Show help
 -v, --version   Show version
 ```
