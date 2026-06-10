@@ -112,3 +112,7 @@ Verify CPU architecture support:
 ```sh
 file .build/apple/Products/Release/spa
 ```
+
+## License
+
+Licensed under the MIT License.

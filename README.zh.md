@@ -112,3 +112,7 @@ cp .build/apple/Products/Release/spa /usr/local/bin/spa
 ```sh
 file .build/apple/Products/Release/spa
 ```
+
+## 许可证
+
+基于 MIT 许可证授权。
