@@ -85,9 +85,17 @@ cp .build/release/spa /usr/local/bin/spa
 brew install jaywcjlove/tap/spa
 ```
 
+macOS 27 beta Install
+
+```bash
+sudo mv /Applications/Xcode.app /Applications/Xcode-26.5.app
+sudo xcode-select -s /Library/Developer/CommandLineTools
+env -u HOMEBREW_USE_INTERNAL_API HOMEBREW_NO_INSTALL_FROM_API=1 brew install jaywcjlove/tap/spa
+```
+
 ## Release
 
-Build a release binary for the current Mac architecture:
+Build a universal release binary that supports both Apple Silicon and Intel Macs:
 
 ```sh
 swift build -c release
