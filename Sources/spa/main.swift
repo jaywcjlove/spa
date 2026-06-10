@@ -1,6 +1,6 @@
 import Foundation
 
-let version = "0.1.1"
+let version = "0.1.2"
 
 struct CLIError: Error, CustomStringConvertible {
     let description: String
