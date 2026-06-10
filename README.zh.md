@@ -1,8 +1,8 @@
 <div markdown="1">
-  <sup>Using <a href="https://wangchujiang.com/#/app" target="_blank">my app</a> is also a way to <a href="https://wangchujiang.com/#/sponsor" target="_blank">support</a> me:</sup>
+  <sup>使用<a href="https://wangchujiang.com/#/app" target="_blank">我的应用</a>，也是对我的<a href="https://wangchujiang.com/#/sponsor" target="_blank">支持</a>：</sup>
   <br>
-  <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6766860898" title="Zipora: Zip/RAR/7Z Unarchiver"><img alt="Zipora: Zip/RAR/7Z Unarchiver" height="52" src="https://wangchujiang.com/appicon/zipora.png"></a>
-  <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6758053530" title="Scap: Screenshot & Markup Edit for macOS"><img alt="Scap: Screenshot & Markup Edit" height="52" src="https://wangchujiang.com/appicon/scap.png"></a>
+  <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6766860898" title="Zipora: Zip/RAR/7Z 解压工具"><img alt="Zipora: Zip/RAR/7Z 解压工具" height="52" src="https://wangchujiang.com/appicon/zipora.png"></a>
+  <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6758053530" title="Scap: macOS 截图与标注编辑工具"><img alt="Scap: 截图与标注编辑" height="52" src="https://wangchujiang.com/appicon/scap.png"></a>
   <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6757317079" title="Screen Test for macOS"><img alt="Screen Test" height="52" src="https://wangchujiang.com/appicon/screen-test.png"></a>
   <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6755948110" title="Deskmark for macOS"><img alt="Deskmark" height="52" src="https://wangchujiang.com/appicon/deskmark.png"></a>
   <a target="_blank" href="https://jaywcjlove.github.io/maslink/?id=6500434773" title="Keyzer for macOS"><img alt="Keyzer" height="52" src="https://wangchujiang.com/appicon/keyzer.png"></a>
@@ -37,61 +37,61 @@
 </div>
 <hr>
 
-[中文](./README.zh.md) • [Usage](#usage) • [Install](#install)
+[English](./README.md) • [使用](#使用) • [安装](#安装)
 
 <hr>
 
 spa
 ==
 
-`spa` is a small Swift command for adding a Swift Package dependency to an Xcode GUI project.
+`spa` 是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
 
-It edits the first `.xcodeproj/project.pbxproj` found in the current directory and adds:
+它会修改当前目录中找到的第一个 `.xcodeproj/project.pbxproj`，并添加：
 
 - `XCRemoteSwiftPackageReference`
 - `XCSwiftPackageProductDependency`
-- a Frameworks build phase entry for the first native target
+- 第一个原生 target 的 Frameworks 构建阶段条目
 
-## Usage
+## 使用
 
 ```sh
 spa <github-url> [version]
 ```
 
-## Examples
+## 示例
 
 ```sh
 spa https://github.com/user/repo
 spa https://github.com/user/repo 1.2.3
 ```
 
-When `version` is omitted, `spa` uses the `main` branch. When `version` is provided, `spa` uses Xcode's `upToNextMajorVersion` requirement.
+未传入 `version` 时，`spa` 使用 `main` 分支。传入 `version` 时，`spa` 使用 Xcode 的 `upToNextMajorVersion` 版本规则。
 
-The package product name is inferred from the repository name. For example, `https://github.com/user/Alamofire` adds product `Alamofire`.
+包产品名会根据仓库名推断。例如，`https://github.com/user/Alamofire` 会添加产品 `Alamofire`。
 
-## Options
+## 选项
 
 ```sh
--h, --help      Show help
--v, --version   Show version
+-h, --help      显示帮助
+-v, --version   显示版本
 ```
 
-## Install
+## 安装
 
 ```sh
 swift build -c release
 cp .build/release/spa /usr/local/bin/spa
 ```
 
-## Release
+## 发布
 
-Build a release binary for the current Mac architecture:
+构建适用于当前 Mac 架构的发布版二进制文件：
 
 ```sh
 swift build -c release
 ```
 
-Build a universal release binary that supports both Apple Silicon and Intel Macs:
+构建同时支持 Apple Silicon 和 Intel Mac 的通用发布版二进制文件：
 
 ```shell
 $ swift build -c release --arch arm64 --arch x86_64
@@ -101,13 +101,13 @@ $ brew tap jaywcjlove/tap
 $ cd "$(brew --repository jaywcjlove/tap)"
 ```
 
-Install it with:
+使用以下命令安装：
 
 ```sh
 cp .build/apple/Products/Release/spa /usr/local/bin/spa
 ```
 
-Verify CPU architecture support:
+验证 CPU 架构支持：
 
 ```sh
 file .build/apple/Products/Release/spa
