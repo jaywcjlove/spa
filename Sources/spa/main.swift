@@ -1,6 +1,6 @@
 import Foundation
 
-let version = "0.1.6"
+let version = "0.1.7"
 
 struct CLIError: Error, CustomStringConvertible {
     let description: String
@@ -279,7 +279,7 @@ struct XcodeProjectEditor {
             of: "isa = XCRemoteSwiftPackageReference;",
             range: searchStart..<contents.endIndex
         ) {
-            guard let objectRange = rangeOfObjectOrLine(containing: isaRange.lowerBound) else {
+            guard let objectRange = rangeOfObjectOrSingleLineObject(containing: isaRange.lowerBound) else {
                 searchStart = isaRange.upperBound
                 continue
             }
@@ -304,7 +304,7 @@ struct XcodeProjectEditor {
             options: [.regularExpression, .caseInsensitive],
             range: searchStart..<contents.endIndex
         ) {
-            guard let objectRange = rangeOfObjectOrLine(containing: productNameRange.lowerBound),
+            guard let objectRange = rangeOfObjectOrSingleLineObject(containing: productNameRange.lowerBound),
                   contents.range(of: "isa = XCSwiftPackageProductDependency;", range: objectRange) != nil,
                   let productID = objectID(in: objectRange),
                   let packageID = firstMatch(in: objectRange, pattern: #"package = ([A-F0-9]{24})"#) else {
@@ -328,7 +328,7 @@ struct XcodeProjectEditor {
             options: .regularExpression,
             range: searchStart..<contents.endIndex
         ) {
-            if let objectRange = rangeOfObjectOrLine(containing: packageRange.lowerBound),
+            if let objectRange = rangeOfObjectOrSingleLineObject(containing: packageRange.lowerBound),
                contents.range(of: "isa = XCSwiftPackageProductDependency;", range: objectRange) != nil,
                let productID = objectID(in: objectRange),
                let productName = productName(in: objectRange) {
@@ -351,7 +351,7 @@ struct XcodeProjectEditor {
             options: .regularExpression,
             range: searchStart..<contents.endIndex
         ) {
-            if let objectRange = rangeOfObjectOrLine(containing: productRefRange.lowerBound),
+            if let objectRange = rangeOfObjectOrSingleLineObject(containing: productRefRange.lowerBound),
                contents.range(of: "isa = PBXBuildFile;", range: objectRange) != nil,
                let buildFileID = objectID(in: objectRange) {
                 ids.insert(buildFileID)
@@ -408,7 +408,7 @@ struct XcodeProjectEditor {
     }
 
     private mutating func removeObject(withID id: String) {
-        guard let objectRange = rangeOfObjectOrLine(withID: id) else {
+        guard let objectRange = rangeOfObjectOrSingleLineObject(withID: id) else {
             return
         }
         contents.removeSubrange(objectRange)
@@ -463,7 +463,7 @@ struct XcodeProjectEditor {
                 break
             }
 
-            guard let objectRange = rangeOfObjectOrLine(containing: matchRange.lowerBound),
+            guard let objectRange = rangeOfObjectOrSingleLineObject(containing: matchRange.lowerBound),
                   contents.range(of: "isa = XCRemoteSwiftPackageReference;", range: objectRange) != nil else {
                 searchStart = matchRange.upperBound
                 continue
@@ -558,52 +558,106 @@ struct XcodeProjectEditor {
         rangeOfObjectStarting(withID: id)
     }
 
-    private func rangeOfObjectOrLine(withID id: String) -> Range<String.Index>? {
+    private func rangeOfObjectOrSingleLineObject(withID id: String) -> Range<String.Index>? {
         guard let idRange = contents.range(
             of: #"\n[ \t]*\#(id)\b"#,
             options: .regularExpression
         ) else {
             return nil
         }
-        return rangeOfObjectStarting(withID: id) ?? lineRange(containing: idRange.upperBound)
+        return rangeOfObjectStarting(withID: id) ?? singleLineObjectRange(containing: idRange.upperBound)
     }
 
-    private func rangeOfObjectOrLine(containing index: String.Index) -> Range<String.Index>? {
+    private func rangeOfObjectOrSingleLineObject(containing index: String.Index) -> Range<String.Index>? {
         if let objectRange = rangeOfObject(containing: index) {
             return objectRange
         }
-        return lineRange(containing: index)
+        return singleLineObjectRange(containing: index)
     }
 
     private func rangeOfObject(containing index: String.Index) -> Range<String.Index>? {
-        let prefix = contents[..<index]
-        guard let start = prefix.range(
-            of: #"\n[ \t]*[A-F0-9]{24} /\*[^\n]*\*/ = \{"#,
-            options: [.regularExpression, .backwards]
-        )?.lowerBound else {
-            return nil
-        }
+        var cursor = index
+        while true {
+            guard let currentLineRange = lineRange(containing: cursor) else {
+                return nil
+            }
 
-        guard let endRange = contents.range(of: "\n\t\t};", range: index..<contents.endIndex) else {
-            return nil
-        }
+            if isObjectHeader(lineRange: currentLineRange) {
+                return objectRange(startingAtLine: currentLineRange)
+            }
 
-        return start..<endRange.upperBound
+            guard currentLineRange.lowerBound > contents.startIndex else {
+                return nil
+            }
+
+            cursor = contents.index(before: currentLineRange.lowerBound)
+        }
     }
 
     private func rangeOfObjectStarting(withID id: String) -> Range<String.Index>? {
-        guard let startRange = contents.range(
-            of: #"\n[ \t]*\#(id) /\*[^\n]*\*/ = \{"#,
+        guard let headerRange = contents.range(
+            of: #"(?m)^[ \t]*\#(id)(\s*/\*[^\n]*\*/)?\s*=\s*\{"#,
             options: .regularExpression
         ) else {
             return nil
         }
 
-        guard let endRange = contents.range(of: "\n\t\t};", range: startRange.upperBound..<contents.endIndex) else {
+        return objectRange(startingAtLine: lineRange(containing: headerRange.lowerBound))
+    }
+
+    private func singleLineObjectRange(containing index: String.Index) -> Range<String.Index>? {
+        guard let lineRange = lineRange(containing: index) else {
             return nil
         }
 
-        return startRange.lowerBound..<endRange.upperBound
+        let line = contents[lineRange]
+        guard line.contains(" = {"), line.contains("};") else {
+            return nil
+        }
+
+        return lineRange
+    }
+
+    private func isObjectHeader(lineRange: Range<String.Index>) -> Bool {
+        contents.range(
+            of: #"^[ \t]*[A-F0-9]{24}(\s*/\*[^\n]*\*/)?\s*=\s*\{"#,
+            options: .regularExpression,
+            range: lineRange
+        ) != nil
+    }
+
+    private func objectRange(startingAtLine lineRange: Range<String.Index>?) -> Range<String.Index>? {
+        guard let lineRange else {
+            return nil
+        }
+
+        guard let openingBrace = contents.range(of: "{", range: lineRange)?.lowerBound else {
+            return nil
+        }
+
+        var depth = 0
+        var index = openingBrace
+        while index < contents.endIndex {
+            let character = contents[index]
+            if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 {
+                    var end = contents.index(after: index)
+                    if end < contents.endIndex, contents[end] == ";" {
+                        end = contents.index(after: end)
+                    }
+                    if end < contents.endIndex, contents[end] == "\n" {
+                        end = contents.index(after: end)
+                    }
+                    return lineRange.lowerBound..<end
+                }
+            }
+            index = contents.index(after: index)
+        }
+
+        return nil
     }
 
     private func lineRange(containing index: String.Index) -> Range<String.Index>? {
