@@ -76,7 +76,7 @@ spa -r ArchiveKit
 ```sh
 -r, --remove <package-name> 移除包依赖
 -h, --help      显示帮助
--v, --version   显示版本 
+-v, --version   显示版本  
 ```
 
 ## 安装
