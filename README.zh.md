@@ -86,6 +86,7 @@ swift build -c release
 cp .build/release/spa /usr/local/bin/spa
 # 或
 brew install jaywcjlove/tap/spa
+brew reinstall jaywcjlove/tap/spa
 ```
 
 macOS 27 beta 安装
@@ -96,8 +97,6 @@ sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
 
 sudo mv /Applications/Xcode.app /Applications/Xcode-26.5.app
 sudo xcode-select -s /Library/Developer/CommandLineTools
-env -u HOMEBREW_USE_INTERNAL_API HOMEBREW_NO_INSTALL_FROM_API=1 brew install jaywcjlove/tap/spa
-brew reinstall jaywcjlove/tap/spa
 ```
 
 ## 发布
