@@ -111,7 +111,7 @@ swift build -c release
 
 ```shell
 $ swift build -c release --arch arm64 --arch x86_64 && \
-  tar -czf ./spa.tar.gz -C ./.build/apple/Products/Release spa
+  tar -czf ./spa.tar.gz -C ./.build/out/Products/Release spa
 
 $ brew tap jaywcjlove/tap
 $ cd "$(brew --repository jaywcjlove/tap)"
