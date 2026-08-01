@@ -110,6 +110,7 @@ struct XcodeProjectEditor {
         let productID = makeID()
         let buildFileID = makeID()
 
+        try ensureSection(named: "PBXBuildFile")
         try ensureSection(named: "XCRemoteSwiftPackageReference")
         try ensureSection(named: "XCSwiftPackageProductDependency")
 
