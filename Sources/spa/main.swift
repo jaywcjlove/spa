@@ -64,9 +64,15 @@ func parseArguments(_ rawArguments: [String]) throws -> Arguments? {
     return Arguments(command: .add(repositoryURL: repositoryURL, version: args.count == 2 ? args[1] : nil))
 }
 
+enum ProjectFormat {
+    case pbxproj
+    case xcproj
+}
+
 struct ProjectSelection {
     let xcodeprojURL: URL
-    let pbxprojURL: URL
+    let fileURL: URL
+    let format: ProjectFormat
 }
 
 func findProject(in directory: URL) throws -> ProjectSelection {
@@ -89,11 +95,16 @@ func findProject(in directory: URL) throws -> ProjectSelection {
     }
 
     let pbxproj = project.appendingPathComponent("project.pbxproj")
-    guard FileManager.default.fileExists(atPath: pbxproj.path) else {
-        throw CLIError(description: "Missing project.pbxproj inside \(project.lastPathComponent).")
+    if FileManager.default.fileExists(atPath: pbxproj.path) {
+        return ProjectSelection(xcodeprojURL: project, fileURL: pbxproj, format: .pbxproj)
     }
 
-    return ProjectSelection(xcodeprojURL: project, pbxprojURL: pbxproj)
+    let xcproj = project.appendingPathComponent("project.xcproj")
+    if FileManager.default.fileExists(atPath: xcproj.path) {
+        return ProjectSelection(xcodeprojURL: project, fileURL: xcproj, format: .xcproj)
+    }
+
+    throw CLIError(description: "Missing project.pbxproj or project.xcproj inside \(project.lastPathComponent).")
 }
 
 struct XcodeProjectEditor {
@@ -755,20 +766,35 @@ do {
 
     let currentDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let project = try findProject(in: currentDirectory)
-    var editor = XcodeProjectEditor(contents: try String(contentsOf: project.pbxprojURL, encoding: .utf8))
+    let original = try String(contentsOf: project.fileURL, encoding: .utf8)
+    let updated: String
 
-    switch arguments.command {
-    case let .add(repositoryURL, packageVersion):
+    switch (project.format, arguments.command) {
+    case let (.pbxproj, .add(repositoryURL, packageVersion)):
+        var editor = XcodeProjectEditor(contents: original)
         try editor.addPackage(repositoryURL: repositoryURL, version: packageVersion)
-        try editor.contents.write(to: project.pbxprojURL, atomically: true, encoding: .utf8)
-
+        updated = editor.contents
         let requirement = packageVersion.map { "version \($0)" } ?? "branch main"
         print("Added \(inferProductName(from: repositoryURL)) (\(requirement)) to \(project.xcodeprojURL.lastPathComponent).")
-    case let .remove(packageName):
+    case let (.pbxproj, .remove(packageName)):
+        var editor = XcodeProjectEditor(contents: original)
         try editor.removePackage(named: packageName)
-        try editor.contents.write(to: project.pbxprojURL, atomically: true, encoding: .utf8)
+        updated = editor.contents
+        print("Removed \(packageName) from \(project.xcodeprojURL.lastPathComponent).")
+    case let (.xcproj, .add(repositoryURL, packageVersion)):
+        var editor = XCProjEditor(contents: original)
+        try editor.addPackage(repositoryURL: repositoryURL, version: packageVersion)
+        updated = editor.contents
+        let requirement = packageVersion.map { "version \($0)" } ?? "branch main"
+        print("Added \(inferProductName(from: repositoryURL)) (\(requirement)) to \(project.xcodeprojURL.lastPathComponent).")
+    case let (.xcproj, .remove(packageName)):
+        var editor = XCProjEditor(contents: original)
+        try editor.removePackage(named: packageName)
+        updated = editor.contents
         print("Removed \(packageName) from \(project.xcodeprojURL.lastPathComponent).")
     }
+
+    try updated.write(to: project.fileURL, atomically: true, encoding: .utf8)
 } catch {
     fputs("spa: \(error)\n", stderr)
     exit(EXIT_FAILURE)

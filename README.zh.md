@@ -47,11 +47,13 @@ spa
 
 `SPA` 是 Swift Package Add 的缩写，是一个用于给 Xcode GUI 项目添加 Swift Package 依赖的小型 Swift 命令行工具。
 
-它会修改当前目录中找到的第一个 `.xcodeproj/project.pbxproj`，并添加：
+它会修改当前目录中找到的第一个 `.xcodeproj/project.pbxproj` 或 `.xcodeproj/project.xcproj`，并添加：
 
 - `XCRemoteSwiftPackageReference`
 - `XCSwiftPackageProductDependency`
 - 第一个原生 target 的 Frameworks 构建阶段条目
+
+以 `project.xcproj` 保存的 Xcode 27 项目会写入 `packages`，并在第一个原生 target 上写入 `package-product-members`。
 
 ## 使用
 
@@ -121,6 +123,7 @@ $ cd "$(brew --repository jaywcjlove/tap)"
 使用以下命令安装：
 
 ```sh
+cp .build/out/Products/Release/spa /usr/local/bin/spa
 cp .build/apple/Products/Release/spa /usr/local/bin/spa
 ```
 

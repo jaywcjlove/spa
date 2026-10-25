@@ -47,11 +47,13 @@ spa
 
 `SPA` is short for Swift Package Add. It is a small Swift command for adding a Swift Package dependency to an Xcode GUI project.
 
-It edits the first `.xcodeproj/project.pbxproj` found in the current directory and adds:
+It edits the first `.xcodeproj/project.pbxproj` or `.xcodeproj/project.xcproj` found in the current directory and adds:
 
 - `XCRemoteSwiftPackageReference`
 - `XCSwiftPackageProductDependency`
 - a Frameworks build phase entry for the first native target
+
+Xcode 27 projects stored as `project.xcproj` get a `packages` entry and a `package-product-members` entry on the first native target.
 
 ## Usage
 
